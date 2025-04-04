@@ -7,7 +7,7 @@
 yarn install
 ```
 
-2) Criae o banco de dados mysql
+2) Criar o banco de dados mysql
 ```bash
 mysql -u root -p
 CREATE DATABASE todo_list_fullstack;
