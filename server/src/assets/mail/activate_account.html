@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{title}}</title>
+  <!--suppress CssUnknownTarget -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background-color: #3f51b5;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .content {
+      padding: 20px;
+      align-items: center;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .content p {
+      line-height: 1.6;
+      color: #555;
+    }
+
+    .code-box {
+      background-color: #eee;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      text-align: center;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .activation-link {
+      display: inline-block;
+      padding: 12px 20px;
+      background-color: #4CAF50;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      transition: background-color 0.3s ease;
+      margin-top: 40px;
+    }
+
+    .activation-link:hover {
+      background-color: #45a049;
+    }
+
+    .footer {
+      background-color: #f0f0f0;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+    }
+
+    .txt-ignore {
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>{{welcome}}</h1>
+  </div>
+  <div class="content">
+    <p>{{str1}}</p>
+    <div class="code-box">
+      {{activationCode}}
+    </div>
+    <!--suppress HtmlUnknownTarget -->
+    <a href="{{activationUrl}}" class="activation-link">{{btnActivate}}</a>
+    <p class="txt-ignore">{{str3}}</p>
+  </div>
+  <div class="footer">
+    © {{copyrightYear}} {{copyrightName}}
+  </div>
+</div>
+</body>
+</html>

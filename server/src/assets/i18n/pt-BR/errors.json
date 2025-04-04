@@ -1,0 +1,6 @@
+{
+  "unable_to_validate_otp_code": "Não foi possível validar o código OTP.",
+  "otp_code_expired": "O código OTP expirou",
+  "invalid_otp_use_case": "Invalid OTP UseCase",
+  "user_not_found": "Usuário não encontrado"
+}

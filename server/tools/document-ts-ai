@@ -1,0 +1,19 @@
+generate doc comment typescript:
+
+export function multerModuleFactory(): DynamicModule {
+  return MulterModule.registerAsync({
+    useFactory: (
+      resourcesService: ResourcesService
+    ) => {
+      const destinationDir = resourcesService.getFileUploadDir();
+      return {
+        storage: diskStorage({
+          destination: destinationDir,
+          filename   : (req, file, callback) => fileNameBuilder(destinationDir, req, file, callback),
+        })
+      }
+    },
+    imports: [ResourcesModule],
+    inject: [ResourcesService]
+  })
+}

@@ -1,0 +1,2124 @@
+Use utils functions from the ```utils.ts code block when needed.
+Use examples to generate the new tests.
+generate "notification.controller.ts" jest unit tests to coverage 100% of the file
+
+```notification.service
+import { Injectable } from "@nestjs/common";
+import { CreateNotificationDto } from "./dto/create-notification.dto";
+import { PrismaPowercodeIdeService } from "../prisma/prisma-powercode-ide.service";
+
+@Injectable()
+export class NotificationService {
+
+  constructor(private readonly prisma: PrismaPowercodeIdeService) {}
+
+  async createNewNotification(data: CreateNotificationDto) {
+    return await this.prisma.notification.create({
+      data: {
+        message: data.message
+      }
+    });
+  }
+}
+```
+
+```notification.controller
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiInternalServerErrorResponse,
+  ApiTags,
+  ApiUnauthorizedResponse
+} from "@nestjs/swagger";
+import { CreateNotificationDto } from "./dto/create-notification.dto";
+import { JwtAuthGuard } from "../../base/auth/jwt-auth.guard";
+import { NotificationService } from "./notification.service";
+import { HttpErrorEntity } from "../../common/error/http-error.entity";
+import { NotificationEntity } from "./entity/notification.entity";
+import { ValidationErrorEntity } from "../../common/validators/entity/validation-error.entity";
+
+@Controller("powercode/notification")
+@ApiTags("powercode/notification")
+export class NotificationController {
+
+  constructor(private readonly notificationService: NotificationService) {}
+
+  @Post()
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiUnauthorizedResponse({
+    type       : HttpErrorEntity,
+    description: "Unauthorized error in case of failure due to user not found in adm auth guard.",
+    example    : {
+      "message"   : "Unauthorized 1",
+      "statusCode": 401
+    }
+  })
+  @ApiBadRequestResponse({
+    type       : ValidationErrorEntity,
+    description: "Validation error, one or more request fields are invalid.",
+    example    : {
+      "message"   : [
+        "Message should be string (message)"
+      ],
+      "error"     : "Bad Request",
+      "statusCode": 400
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async create(
+    @Body() data: CreateNotificationDto
+  ) {
+    return new NotificationEntity(
+      await this.notificationService.createNewNotification(data)
+    );
+  }
+}
+```
+
+```plugin.controller.spec
+import { Test, TestingModule } from '@nestjs/testing';
+import { PluginController } from './plugin.controller';
+import { PluginService } from './plugin.service';
+import { CreatePluginDto } from './dto/create-plugin.dto';
+import { PluginEntity } from './entity/plugin.entity';
+import {
+  copyUploadTestAssets,
+  getUploadTestDir,
+  mockExecutionContext,
+  mockPluginService,
+  mockResourcesService,
+  mockUsers
+} from '../../../utils/tests/utils';
+import { PluginStatus } from "@prisma-db-powercode-ide/client";
+import { PrismaPowercodeIdeService } from "../prisma/prisma-powercode-ide.service";
+import { BadRequestException, UnauthorizedException } from "@nestjs/common";
+import { ResourcesService } from "../../common/resources/resources.service";
+import { ConfigService } from "../../common/config/config.service";
+import { PluginImageDto } from "./dto/plugin-image.dto";
+import { DeletePluginImageDto } from "./dto/delete-plugin-image.dto";
+import {  HttpStatus } from "@nestjs/common";
+import { PluginImageEntity } from "./entity/plugin-image.entity";
+import path from "path";
+import { result } from "lodash";
+
+describe('PluginController', () => {
+  let controller: PluginController;
+  let pluginService: PluginService;
+  let prismaService: PrismaPowercodeIdeService;
+  let resourcesService: ResourcesService;
+
+  beforeEach(async () => {
+    const {
+      pluginService: pluginServiceMock,
+      prismaService: prismaServiceMock,
+      resourcesService: resourcesServiceMock
+    } = await mockPluginService();
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [PluginController],
+      providers: [
+        {
+          provide: PluginService,
+          useValue: pluginServiceMock
+        },
+        ConfigService,
+        {
+          provide: ResourcesService,
+          useValue: resourcesServiceMock
+        },
+        {
+          provide: PrismaPowercodeIdeService,
+          useValue: prismaServiceMock
+        }
+      ],
+    }).compile();
+
+    controller = module.get<PluginController>(PluginController);
+    pluginService = module.get<PluginService>(PluginService);
+    prismaService = module.get<PrismaPowercodeIdeService>(PrismaPowercodeIdeService);
+    resourcesService = module.get<ResourcesService>(ResourcesService);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  describe('create', () => {
+    it('should create a plugin successfully', async () => {
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        mockUsers()[0]
+      );
+      // noinspection DuplicatedCode
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const createPluginDto: CreatePluginDto = {
+        guid: 'test.plugin.guid',
+        name: 'Test Plugin',
+        description: 'This is a test plugin',
+        icon: 'test/icon.png',
+      };
+
+      const mockCreatedPlugin = {
+        id:1,
+        userId: 1,
+        guid: "test.plugin.guid",
+        name: "Test Plugin",
+        description: "This is a test plugin",
+        icon: "test/icon.png",
+        status: PluginStatus.Created,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      (prismaService.plugin.create as jest.Mock).mockResolvedValue(mockCreatedPlugin);
+
+      const result = await controller.create(createPluginDto, request);
+
+      expect(result).toBeInstanceOf(PluginEntity);
+      expect(result.id).toEqual(mockCreatedPlugin.id);
+      expect(result.userId).toEqual(mockCreatedPlugin.userId);
+      expect(result.guid).toEqual(mockCreatedPlugin.guid);
+      expect(result.name).toEqual(mockCreatedPlugin.name);
+      expect(result.description).toEqual(mockCreatedPlugin.description);
+      expect(result.icon).toEqual(mockCreatedPlugin.icon);
+      expect(result.status).toEqual(mockCreatedPlugin.status);
+    });
+
+    it('should throw unauthorized user', async () => {
+      const executionContext = mockExecutionContext();
+      // noinspection DuplicatedCode
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const createPluginDto: CreatePluginDto = {
+        guid: 'test.plugin.guid',
+        name: 'Test Plugin',
+        description: 'This is a test plugin',
+        icon: 'test/icon.png',
+      };
+
+      const mockCreatedPlugin = {
+        id:1,
+        userId: 1,
+        guid: "test.plugin.guid",
+        name: "Test Plugin",
+        description: "This is a test plugin",
+        icon: "test/icon.png",
+        status: PluginStatus.Created,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      (prismaService.plugin.create as jest.Mock).mockResolvedValue(new PluginEntity(mockCreatedPlugin));
+
+      const result = controller.create(createPluginDto, request);
+
+      await expect(result).rejects.toThrow(new UnauthorizedException())
+    });
+  });
+
+  describe('uploadIcon', () => {
+    it('should update plugin icon successfully', async () => {
+      const user = mockUsers()[0];
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        user
+      );
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+      const pluginIconDto: PluginImageDto = {
+        pluginId: 1
+      };
+      const { uploadTestDir } = getUploadTestDir(resourcesService);
+      const { uploadTestImage } = copyUploadTestAssets(resourcesService, uploadTestDir);
+
+      const publicUploadFilePath = path.normalize(uploadTestImage).replace(uploadTestDir, "").replaceAll(path.sep, "/");
+      const mockFile = {
+        path: path.normalize(uploadTestImage)
+      } as Express.Multer.File;
+
+      const mockUpdatedPlugin = {
+        id: 1,
+        userId: 1,
+        guid: "test.plugin.guid",
+        name: "Test Plugin",
+        description: "This is a test plugin",
+        icon: "/uploaded/tests/old-plugin.png",
+        status: PluginStatus.Created,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      (pluginService.updatePluginIcon as jest.Mock).mockResolvedValue(mockUpdatedPlugin);
+      (resourcesService.getPublicFileUploadPath as jest.Mock).mockReturnValue(publicUploadFilePath);
+
+      const result = await controller.uploadIcon(request, pluginIconDto, mockFile);
+      expect(result).toBeInstanceOf(PluginEntity);
+      expect(pluginService.updatePluginIcon).toHaveBeenCalledWith(
+        {
+          pluginId: pluginIconDto.pluginId,
+          userId: user.id
+        },
+        mockFile.path
+      );
+
+    });
+
+    it('should throw unauthorized user', async () => {
+      const executionContext = mockExecutionContext();
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const pluginIconDto: PluginImageDto = {
+        pluginId: 1
+      };
+      const mockFile = {
+        path: 'test/file.png'
+      } as Express.Multer.File;
+
+      const result = controller.uploadIcon(request, pluginIconDto, mockFile);
+
+      await expect(result).rejects.toThrow(new UnauthorizedException())
+    });
+
+    it('should throw file validation error', async () => {
+      const user = mockUsers()[0];
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        user
+      );
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+      const pluginIconDto: PluginImageDto = {
+        pluginId: 1
+      };
+      const result = controller.uploadIcon(request, pluginIconDto, undefined);
+
+      await expect(result).rejects.toThrow("Validation failed (file is expected)");
+    });
+  });
+
+
+  describe('uploadImage', () => {
+    it('should add plugin image successfully', async () => {
+      const user = mockUsers()[0];
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        user
+      );
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+      const pluginImageDto: PluginImageDto = {
+        pluginId: 1
+      };
+      const mockFile = {
+        path: 'test/file.png'
+      } as Express.Multer.File;
+
+      const mockCreatedPluginImage = {
+        id: 1,
+        pluginId: 1,
+        file: "powercode/users/1/test/file.png",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      (pluginService.addPluginImage as jest.Mock).mockResolvedValue(mockCreatedPluginImage);
+      (resourcesService.getPublicFileUploadPath as jest.Mock).mockReturnValue("powercode/users/1/test/file.png");
+
+      const result = await controller.uploadImage(request, pluginImageDto, mockFile);
+
+      expect(result).toBeInstanceOf(PluginImageEntity);
+      expect(pluginService.addPluginImage).toHaveBeenCalledWith(
+        {
+          pluginId: pluginImageDto.pluginId,
+          userId: user.id
+        },
+        mockFile.path
+      );
+
+    });
+
+    it('should throw unauthorized user', async () => {
+      const executionContext = mockExecutionContext();
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const pluginImageDto: PluginImageDto = {
+        pluginId: 1
+      };
+      const mockFile = {
+        path: 'test/file.png'
+      } as Express.Multer.File;
+
+      const result = controller.uploadImage(request, pluginImageDto, mockFile);
+
+      await expect(result).rejects.toThrow(new UnauthorizedException())
+    });
+
+    it('should throw file validation error', async () => {
+      const user = mockUsers()[0];
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        user
+      );
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+      const pluginImageDto: PluginImageDto = {
+        pluginId: 1
+      };
+      const mockFile = {
+        path: 'test/file.png'
+      } as Express.Multer.File;
+
+      const result = controller.uploadImage(request, pluginImageDto, undefined);
+
+      await expect(result).rejects.toThrow("Validation failed (file is expected)");
+    });
+  });
+
+  describe('deleteImage', () => {
+    it('should delete plugin image successfully', async () => {
+      const user = mockUsers()[0];
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        user
+      );
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const deletePluginImageDto: DeletePluginImageDto = {
+        pluginId: 1,
+        imageId: 1
+      };
+
+      const mockDeletedPluginImage = {
+        id: 1,
+        pluginId: 1,
+        file: "powercode/users/1/test/file.png",
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      (pluginService.deletePluginImage as jest.Mock).mockResolvedValue(mockDeletedPluginImage);
+
+      const result = await controller.deleteImage(request, deletePluginImageDto);
+      expect(result).toBeInstanceOf(PluginImageEntity);
+      expect(pluginService.deletePluginImage).toHaveBeenCalledWith({
+        ...deletePluginImageDto,
+        userId: user.id
+      })
+    });
+
+    it('should throw unauthorized user', async () => {
+      const executionContext = mockExecutionContext();
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const deletePluginImageDto: DeletePluginImageDto = {
+        pluginId: 1,
+        imageId: 1
+      };
+      const result = controller.deleteImage(request, deletePluginImageDto);
+
+      await expect(result).rejects.toThrow(new UnauthorizedException())
+    });
+  });
+
+  describe('listUserPlugins', () => {
+    it('should list user plugins successfully', async () => {
+      const user = mockUsers()[0];
+      const executionContext = mockExecutionContext(
+        undefined,
+        undefined,
+        undefined,
+        user
+      );
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const mockUserPlugins = [{
+        id: 1,
+        userId: 1,
+        guid: "test.plugin.guid",
+        name: "Test Plugin",
+        description: "This is a test plugin",
+        icon: "test/icon.png",
+        status: PluginStatus.Created,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }];
+
+      (pluginService.userPlugins as jest.Mock).mockResolvedValue(mockUserPlugins);
+
+      const result = await controller.listUserPlugins(request);
+      expect(result).toBeInstanceOf(Array);
+      expect(result[0]).toBeInstanceOf(PluginEntity);
+      expect(pluginService.userPlugins).toHaveBeenCalledWith(user.id);
+    });
+
+    it('should throw unauthorized user', async () => {
+      const executionContext = mockExecutionContext();
+      const http = executionContext.switchToHttp();
+      const request = http.getRequest();
+
+      const result = controller.listUserPlugins(request);
+
+      await expect(result).rejects.toThrow(new UnauthorizedException())
+    });
+  });
+});
+```
+
+```plugin.service
+import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CreatePluginDto } from "./dto/create-plugin.dto";
+import { PrismaPowercodeIdeService } from "../prisma/prisma-powercode-ide.service";
+import { PluginImageDto } from "./dto/plugin-image.dto";
+import fs from "fs";
+import { ResourcesService } from "../../common/resources/resources.service";
+import { DeletePluginImageDto } from "./dto/delete-plugin-image.dto";
+
+@Injectable()
+export class PluginService {
+
+  constructor(
+    private readonly prisma: PrismaPowercodeIdeService,
+    private readonly resources: ResourcesService
+  ){}
+
+  /**
+   * Creates a new plugin in the database.
+   * @param {CreatePluginDto} createPluginDto - The data for the new plugin.
+   * @returns {Promise<PluginEntity>} - A promise resolving to the newly created plugin.
+   * @throws {Error} If there is an issue during plugin creation, most likely prisma error.
+   */
+  async create(createPluginDto: CreatePluginDto & { userId: number }) {
+    return await this.prisma.plugin.create({
+      data: createPluginDto
+    });
+  }
+
+  /**
+   * Updates the icon of a plugin.
+   *
+   * This function updates the plugin's icon in the database with the path provided,
+   * after performing several checks and deleting the old icon file.
+   *
+   * @param {PluginImageDto & { userId: number }} pluginIconDto - The DTO containing pluginId and user ID.
+   * @param {string | undefined} filePath - The path to the newly uploaded plugin icon.
+   * @returns {Promise<Plugin>} - The updated plugin data.
+   * @throws {BadRequestException} - If the file path is not provided, indicating an error during upload.
+   * @throws {UnauthorizedException} - If no plugin is found for the specified user and plugin ID.
+   * @throws {Error} - Propagates any other errors that occur during the process.
+   *
+   * @async
+   */
+  async updatePluginIcon(pluginIconDto: PluginImageDto & { userId: number }, filePath: string | undefined) {
+    if (!filePath) {
+      // noinspection ExceptionCaughtLocallyJS
+      throw new BadRequestException("Plugin icon not uploaded");
+    }
+    try {
+      const userPlugin = await this.prisma.plugin.findUnique({
+        where: {
+          userId: pluginIconDto.userId,
+          id    : pluginIconDto.pluginId
+        }
+      });
+      if (!userPlugin) {
+        // Error happen delete current file
+        // noinspection ExceptionCaughtLocallyJS
+        throw new UnauthorizedException("Plugin not found");
+      }
+
+      // Delete old plugin icon before update new icon in database
+      this.deleteFile(`${this.resources.fromPublicFileUploadPath(userPlugin.icon)}`);
+
+      // Updated plugin
+      return await this.prisma.plugin.update({
+        data : {
+          icon: this.resources.getPublicFileUploadPath(filePath)
+        },
+        where: {
+          id: userPlugin.id
+        }
+      });
+    } catch (e) {
+      this.deleteFile(filePath);
+      throw e;
+    }
+  }
+
+  async addPluginImage(pluginImageDto: PluginImageDto & { userId: number }, filePath: string | undefined) {
+    if (!filePath) {
+      // noinspection ExceptionCaughtLocallyJS
+      throw new BadRequestException("Plugin icon not uploaded");
+    }
+    try {
+      const userPlugin = await this.prisma.plugin.findUnique({
+        where: {
+          userId: pluginImageDto.userId,
+          id    : pluginImageDto.pluginId
+        }
+      });
+      if (!userPlugin) {
+        // Error happen delete current file
+        // noinspection ExceptionCaughtLocallyJS
+        throw new UnauthorizedException("Plugin not found");
+      }
+
+      // Updated plugin
+      return await this.prisma.pluginImage.create({
+        data : {
+          pluginId: userPlugin.id,
+          file: this.resources.getPublicFileUploadPath(filePath)
+        }
+      });
+    } catch (e) {
+      this.deleteFile(filePath);
+      throw e;
+    }
+  }
+
+  async deletePluginImage(pluginImageDto: DeletePluginImageDto & { userId: number }) {
+    const userPlugin = await this.prisma.plugin.findUnique({
+      where: {
+        userId: pluginImageDto.userId,
+        id    : pluginImageDto.pluginId
+      }
+    });
+    if (!userPlugin) {
+      // Error happen delete current file
+      // noinspection ExceptionCaughtLocallyJS
+      throw new UnauthorizedException("Plugin not found");
+    }
+
+    // Delete image file
+    const pluginImage = await this.prisma.pluginImage.findUnique({
+      where: {
+        id: pluginImageDto.imageId,
+        pluginId: userPlugin.id
+      }
+    });
+
+    // Delete image file
+    this.deleteFile(this.resources.fromPublicFileUploadPath(pluginImage.file));
+
+    // Delete plugin image from the database
+    return await this.prisma.pluginImage.delete({
+      where: {
+        id: pluginImageDto.imageId,
+        pluginId: userPlugin.id
+      }
+    });
+  }
+
+  async userPlugins(userId: number) {
+    return await this.prisma.plugin.findMany({
+      include: {
+        owner: true
+      },
+      where: {
+        userId: userId
+      }
+    });
+  }
+
+  /**
+   * Deletes a file at the given path.
+   *
+   * This function is a helper to delete files used by updatePluginIcon
+   *
+   * @param {string} path - The path to the file to delete. Can be undefined in case of missing file
+   */
+  private deleteFile(path: string) {
+    if (fs.existsSync(path)) {
+      fs.unlinkSync(path);
+    }
+  }
+}
+```
+
+```plugin.controller
+import {
+  Body,
+  Controller, Delete, FileTypeValidator, Get, MaxFileSizeValidator, ParseFilePipe, Patch,
+  Post,
+  UnauthorizedException, UploadedFile,
+  UseGuards, UseInterceptors,
+} from "@nestjs/common";
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth, ApiBody, ApiConsumes,
+  ApiCreatedResponse,
+  ApiInternalServerErrorResponse, ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse
+} from "@nestjs/swagger";
+import { PluginService } from "./plugin.service";
+import { PluginEntity } from "./entity/plugin.entity";
+import { CreatePluginDto } from "./dto/create-plugin.dto";
+import { HttpErrorEntity } from "../../common/error/http-error.entity";
+import { ValidationErrorEntity } from "../../common/validators/entity/validation-error.entity";
+import { JwtAuthGuard } from "../../base/auth/jwt-auth.guard";
+import { Request } from "@nestjs/common/decorators/http/route-params.decorator";
+import { Request as ExpressRequest } from "express";
+import { User } from "@prisma-db-powercode-ide/client";
+import { PluginImageDto } from "./dto/plugin-image.dto";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { PluginImageEntity } from "./entity/plugin-image.entity";
+import { DeletePluginImageDto } from "./dto/delete-plugin-image.dto";
+import { plainToInstance } from "class-transformer";
+
+@Controller('powercode/plugin')
+@ApiTags('powercode/plugin')
+export class PluginController {
+
+  constructor(
+    private readonly pluginService: PluginService
+  ) {}
+
+  @Post()
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiUnauthorizedResponse({
+    type       : HttpErrorEntity,
+    description: "Unauthorized error in case of failure due to user not found in adm auth guard.",
+    example    : {
+      "message"   : "Unauthorized 1",
+      "statusCode": 401
+    }
+  })
+  @ApiCreatedResponse({type: PluginEntity, description: "Plugin created with success."})
+  @ApiBadRequestResponse({
+    type       : ValidationErrorEntity,
+    description: "Validation error, one or more request fields are invalid.",
+    example    : {
+      "message"   : [
+        "Plugin name already exists",
+        "Plugin guid already exists"
+      ],
+      "error"     : "Bad Request",
+      "statusCode": 400
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async create(@Body() createPluginDto: CreatePluginDto, @Request() request: ExpressRequest) {
+    const user = request.user as User;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return new PluginEntity(
+      await this.pluginService.create(
+        {
+          ...createPluginDto,
+          userId: user.id
+        }
+      )
+    );
+  }
+
+  @Patch("icon")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        pluginId: {
+          type: 'integer',
+          example: 1
+        },
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOkResponse({type: PluginEntity, description: "Plugin icon updated with success."})
+  @ApiUnauthorizedResponse({
+    type       : HttpErrorEntity,
+    description: "Unauthorized error in case of failure due to user not found in auth guard.",
+    example    : {
+      "message"   : "Unauthorized 1",
+      "statusCode": 401
+    }
+  })
+  @ApiBadRequestResponse({
+    type       : ValidationErrorEntity,
+    description: "Validation error, one or more request fields are invalid.",
+    example    : {
+      "message"   : [
+        "Plugin icon not uploaded"
+      ],
+      "error"     : "Bad Request",
+      "statusCode": 400
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async uploadIcon(
+    @Request() request: ExpressRequest,
+    @Body() pluginIconDto: PluginImageDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 512000 }),
+          new FileTypeValidator({ fileType: /^image\/(png|jpeg|jpg)$/ })
+        ]
+      })
+    )
+    file: Express.Multer.File
+  ) {
+    const user = request.user as User;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    new PluginEntity(
+      await this.pluginService.updatePluginIcon({
+        ...pluginIconDto,
+        userId: user.id
+      }, file.path)
+    );
+  }
+
+  @Post("image")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        pluginId: {
+          type: 'integer',
+          example: 1
+        },
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOkResponse({type: PluginImageEntity, description: "Plugin image updated with success."})
+  @ApiUnauthorizedResponse({
+    type       : HttpErrorEntity,
+    description: "Unauthorized error in case of failure due to user not found in auth guard.",
+    example    : {
+      "message"   : "Unauthorized 1",
+      "statusCode": 401
+    }
+  })
+  @ApiBadRequestResponse({
+    type       : ValidationErrorEntity,
+    description: "Validation error, one or more request fields are invalid.",
+    example    : {
+      "message"   : [
+        "Plugin icon not uploaded"
+      ],
+      "error"     : "Bad Request",
+      "statusCode": 400
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async uploadImage(
+    @Request() request: ExpressRequest,
+    @Body() pluginImageDto: PluginImageDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 512000 }),
+          new FileTypeValidator({ fileType: /^image\/(png|jpeg|jpg)$/ })
+        ]
+      })
+    )
+    file: Express.Multer.File
+  ) {
+    const user = request.user as User;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    new PluginImageEntity(
+      await this.pluginService.addPluginImage({
+        ...pluginImageDto,
+        userId: user.id
+      }, file.path)
+    );
+  }
+
+  @Delete("image")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOkResponse({ type: PluginImageEntity, description: "Plugin image deleted with success." })
+  @ApiUnauthorizedResponse({
+    type       : HttpErrorEntity,
+    description: "Unauthorized error in case of failure due to user not found in auth guard.",
+    example    : {
+      "message"   : "Unauthorized 1",
+      "statusCode": 401
+    }
+  })
+  @ApiBadRequestResponse({
+    type       : ValidationErrorEntity,
+    description: "Validation error, one or more request fields are invalid.",
+    example    : {
+      "message"   : [
+        "Plugin id must be string (pluginId)"
+      ],
+      "error"     : "Bad Request",
+      "statusCode": 400
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async deleteImage(
+    @Request() request: ExpressRequest,
+    @Body() pluginImageDto: DeletePluginImageDto,
+  ) {
+    const user = request.user as User;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    return new PluginImageEntity(
+      await this.pluginService.deletePluginImage({...pluginImageDto, userId: user.id})
+    );
+  }
+
+  @Get("my-plugins")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOkResponse({ type: PluginEntity, isArray: true, description: "All user plugins" })
+  @ApiUnauthorizedResponse({
+    type       : HttpErrorEntity,
+    description: "Unauthorized error in case of failure due to user not found in auth guard.",
+    example    : {
+      "message"   : "Unauthorized 1",
+      "statusCode": 401
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async listUserPlugins(@Request() request: ExpressRequest) {
+    const user = request.user as User;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return plainToInstance(PluginEntity, (await this.pluginService.userPlugins(user.id)));
+  }
+}
+```
+
+```file.controller.ts
+import { Controller, Get, Param, Res } from "@nestjs/common";
+import { ApiParam, ApiTags } from "@nestjs/swagger";
+import { Response } from "express";
+import { ResourcesService } from "../resources/resources.service";
+
+@Controller('file')
+@ApiTags('file')
+export class FileController {
+
+  constructor(
+    private readonly resources: ResourcesService
+  ) {}
+
+  @Get(':filePath')
+  @ApiParam({
+    name: "filePath",
+    type: "string",
+    example: "powercode/users/1/1735333146622-plugin.png"
+  })
+  seeUploadedFile(@Param('filePath') image: string, @Res() res: Response) {
+    return res.sendFile(image, { root: this.resources.getFileUploadDir() });
+  }
+}
+```
+
+```plugins.controller.ts
+import { Body, Controller, Post } from "@nestjs/common";
+import { ApiBadRequestResponse, ApiCreatedResponse, ApiInternalServerErrorResponse, ApiTags } from "@nestjs/swagger";
+import { PluginService } from "./plugin.service";
+import { PluginEntity } from "./entity/plugin.entity";
+import { CreatePluginDto } from "./dto/create-plugin.dto";
+import { HttpErrorEntity } from "../../common/error/http-error.entity";
+import { ValidationErrorEntity } from "../../common/validators/entity/validation-error.entity";
+
+@Controller('powercode/plugin')
+@ApiTags('powercode/plugin')
+export class PluginController {
+  constructor(private readonly pluginService: PluginService) {}
+
+  @Post()
+  @ApiCreatedResponse({type: PluginEntity, description: "Plugin created with success."})
+  @ApiBadRequestResponse({
+    type       : ValidationErrorEntity,
+    description: "Validation error, one or more request fields are invalid.",
+    example    : {
+      "message"   : [
+        "Plugin name already exists",
+        "Plugin guid already exists"
+      ],
+      "error"     : "Bad Request",
+      "statusCode": 400
+    }
+  })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  async create(@Body() createPluginDto: CreatePluginDto) {
+    return new PluginEntity(await this.pluginService.create(createPluginDto));
+  }
+
+
+}
+```
+
+```users2.service.ts
+import { Injectable } from "@nestjs/common";
+import { PrismaPowercodeIdeService } from "../prisma/prisma-powercode-ide.service";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import { UserStatus } from "@prisma-db-powercode-ide/client";
+
+@Injectable()
+export class UsersService {
+
+  constructor(
+    private readonly prisma: PrismaPowercodeIdeService
+  ) {}
+
+  /**
+   * Creates a new user.
+   *
+   * @param createUserDto The data for the new user.
+   * @returns A Promise that resolves to the newly created user object.
+   */
+  async create(createUserDto: CreateUserDto) {
+    // Create user
+    return await this.prisma.user.create({
+      data: createUserDto,
+    });
+  }
+
+  /**
+   * Updates an existing user.
+   *
+   * @param id The ID of the user to update.
+   * @param updateUserDto The data to update the user with.
+   * @returns A Promise that resolves to the updated user object.
+   */
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    return this.prisma.user.update({
+      where: { id },
+      data: updateUserDto,
+    });
+  }
+
+  /**
+   * Sets the email activation status and updates the user status to Active for a given user.
+   *
+   * @param id The ID of the user to update.
+   * @param activated The new email activation status (true for activated, false for deactivated).
+   * @returns A Promise that resolves to the updated user object.
+   */
+  async setEmailActivation(id: number, activated: boolean) {
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        isEmailActivated: activated,
+        status: UserStatus.Active
+      }
+    });
+  }
+}
+```
+
+```dynamic-db-url.middleware.ts
+import { HttpException, Injectable, NestMiddleware } from "@nestjs/common";
+import { DynamicDbUrl } from "./dynamic-db-url.service";
+import { NextFunction, Request } from "express";
+
+@Injectable()
+export class DynamicDbUrlMiddleware implements NestMiddleware {
+
+  constructor(
+    private dynamicDbUrlService: DynamicDbUrl
+  ) { }
+
+  async use(req: Request, res: Response, next: NextFunction) {
+    const headerValue = req.headers["x-header-example"];
+
+    if (!headerValue)
+      throw new HttpException("x-header-example header is required", 400);
+
+    const dbConnectionStringTemplate = process.env.DB_URL;
+    const dbConnectionString = dbConnectionStringTemplate.replace('{NICKNAME}', headerValue as string);
+    this.dynamicDbUrlService.setDbUrl(dbConnectionString);
+    next();
+  }
+}
+```
+
+```utils.ts
+import { Request, Response } from "express";
+import { User, UserRole, UserStatus } from "@prisma/client";
+import { I18nService } from "nestjs-i18n";
+import { ResourcesService } from "../../modules/resources/resources.service";
+import { Test, TestingModule } from "@nestjs/testing";
+import { AcceptedLanguages } from "../../types/i18n";
+import path from "path";
+import { ExecutionContext, HttpStatus } from "@nestjs/common";
+import { HttpArgumentsHost } from "@nestjs/common/interfaces";
+import { ConfigService } from "../../modules/config/config.service";
+import { OtpService } from "../../modules/otp/otp.service";
+import { PrismaBaseService } from "../../modules/prisma/prisma.service";
+
+/**
+ * Mocks the ResourcesService for testing purposes.
+ *
+ * This function creates a testing module with the ResourcesService provider
+ * and compiles it. It then retrieves the ResourcesService instance from
+ * the compiled module.
+ *
+ * @returns A Promise that resolves to the mocked ResourcesService instance.
+ */
+export async function mockResourcesService(): Promise<ResourcesService> {
+  const app: TestingModule = await Test.createTestingModule({
+    providers: [ResourcesService],
+  }).compile();
+
+  return app.get<ResourcesService>(ResourcesService);
+}
+
+/**
+ * Mocks the I18nService for testing purposes.
+ *
+ * This function creates a mock implementation of the I18nService, primarily
+ * mocking the `t` (translate) function. The mock implementation retrieves
+ * translations from JSON files based on the provided language and input key.
+ *
+ * @param resourcesService - Either an instance of ResourcesService or a
+ *                          function that returns an instance. This is used
+ *                          to access translation files.
+ * @param language - The language to use for translations (default: 'en-US').
+ *
+ * @returns A mocked I18nService object with a mocked `t` function.
+ */
+export function mockI18nService(
+  // resourcesService: ResourcesService|(() => ResourcesService),
+  resourcesService: (() => ResourcesService),
+  language: AcceptedLanguages = "en-US"
+): I18nService {
+  return {
+    t: jest.fn().mockImplementation((input) => {
+      const inputSplit = input.split(".");
+      // const mResourcesService: ResourcesService = typeof resourcesService === "function" ? resourcesService() : resourcesService;
+      const mResourcesService: ResourcesService = resourcesService();
+      const i18nDirName = mResourcesService.getI18nDirName();
+      let i18nTranslations = mResourcesService.getAssetFileJson(
+        path.normalize(`${i18nDirName}/${language}/${inputSplit[0]}.json`)
+      );
+      const subInputSplit: string[] = inputSplit.slice(1);
+
+      let tValue = "";
+      subInputSplit.forEach((key, index) => {
+        if (index < subInputSplit.length - 1) {
+          i18nTranslations = i18nTranslations[key] as {[key:string]: unknown};
+        } else {
+          tValue = i18nTranslations[key] as string;
+        }
+      });
+
+      return tValue;
+    })
+  } as unknown as I18nService
+}
+
+/**
+ * Creates a mocked instance of the `ConfigService`.
+ *
+ * This function sets up a testing module with the `ConfigService` provider
+ * and returns the mocked instance.
+ *
+ * @returns A Promise that resolves to the mocked `ConfigService` instance.
+ */
+export async function mockConfigService(): Promise<ConfigService> {
+  const app: TestingModule = await Test.createTestingModule({
+    providers: [ConfigService],
+  }).compile();
+
+  return app.get<ConfigService>(ConfigService);
+}
+
+/**
+ * Mocks common Prisma query methods.
+ *
+ * This function returns an object with the following mocked methods:
+ *
+ * - `create`: Mocked `create` method. Used to create a new record in the database. See [Prisma Documentation](https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#create) for more details.
+ * - `findMany`: Mocked `findMany` method. Used to retrieve multiple records that match the specified filter criteria. See [Prisma Documentation](https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#findmany) for more details.
+ * - `findAll`: Mocked `findAll` method. An alias for `findMany`.
+ * - `findUnique`: Mocked `findUnique` method. Used to retrieve a single unique record that matches the specified criteria. See [Prisma Documentation](https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#findunique) for more details.
+ * - `findOne`: Mocked `findOne` method. An alias for `findUnique`.
+ * - `update`: Mocked `update` method. Used to update an existing record in the database. See [Prisma Documentation](https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#update) for more details.
+ * - `delete`: Mocked `delete` method. Used to delete a record from the database. See [Prisma Documentation](https://www.prisma.io/docs/reference/api-reference/prisma-client-reference#delete) for more details.
+ * - `remove`: Mocked `remove` method. An alias for `delete`.
+ *
+ * @returns An object containing mocked Prisma query methods.
+ */
+export function mockPrismaQueries() {
+  return {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findAll: jest.fn(),
+    findUnique: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    remove: jest.fn(),
+  }
+}
+
+/**
+ * Creates a mock ExecutionContext object for testing NestJS middleware or other components that rely on it.
+ *
+ * This function provides a convenient way to set up a realistic testing environment by mocking:
+ *
+ * - Request object (`req`):  Includes mocked methods for common request properties like headers, method, URL, and IP.
+ * - Response object (`resp`):  Uses `mockResponse` to provide a pre-configured mock response.
+ * - HttpArgumentsHost: Mocked to return the configured `req` and `resp` objects.
+ * - ExecutionContext:  Mocked to return the configured `HttpArgumentsHost`.
+ *
+ * @param reqUrl The requested URL. Defaults to '/test'.
+ * @param reqMethod The HTTP method. Defaults to 'POST'.
+ * @param reqHeaders An object containing request headers.
+ *               Defaults to { "user-agent": "Mockup User Agent", "accept-language": "en-US" }.
+ * @param reqUser  The authenticated user object (optional). Defaults to undefined.
+ * @param reqIp  The client's IP address. Defaults to "0.0.0.0".
+ * @param req  (Optional) A custom Request object. If provided, this will override the defaults.
+ * @param resp (Optional) A custom Response object. If not provided, `mockResponse()` is used.
+ * @param httpArgumentsHost (Optional) A custom HttpArgumentsHost object.
+ * @param executionContext (Optional) A custom ExecutionContext object.
+ *
+ * @returns A mocked ExecutionContext object ready for use in tests.
+ */
+export function mockExecutionContext(
+  reqUrl: string = "/test",
+  reqMethod: string = "POST",
+  reqHeaders: {[mKey:string]: unknown} = {
+    "user-agent": "Mockup User Agent",
+    "accept-language": "en-US"
+  },
+  reqUser: Express.User|undefined = undefined,
+  reqIp: string = "0.0.0.0",
+  req: Request = {
+    user: reqUser,
+    get: jest.fn().mockImplementation((key: string) => reqHeaders[key]),
+    header: jest.fn().mockImplementation((key: string) => reqHeaders[key]),
+    method: reqMethod,
+    originalUrl: reqUrl,
+    ip: reqIp
+  } as unknown as Request,
+  resp: Response = mockResponse(),
+  httpArgumentsHost: HttpArgumentsHost = {
+    getRequest: jest.fn().mockReturnValue(req),
+    getResponse: jest.fn().mockReturnValue(resp)
+  } as unknown as HttpArgumentsHost,
+  executionContext: ExecutionContext = {
+    switchToHttp: jest.fn().mockReturnValue(httpArgumentsHost)
+  } as unknown as ExecutionContext
+): ExecutionContext {
+  return executionContext;
+}
+
+/**
+ * Creates a mock Response object for testing purposes.
+ *
+ * The mock response object includes implementations for common methods like:
+ * - `status`: Sets the status code (always returns itself for chaining).
+ * - `json`: Sets the response body as JSON (always returns itself for chaining).
+ * - `on`: Simulates event listeners, particularly for the 'close' event.
+ * - `send`: Simulates sending the response and triggers the 'close' event if a listener is attached.
+ * - `get`: Retrieves headers, calculating 'Content-Length' based on provided data.
+ *
+ * @param statusCode The HTTP status code to set for the response. Defaults to HttpStatus.OK (200).
+ * @param data The data object to be used as the response body. Defaults to an empty object.
+ * @param headers An object containing headers to set on the response.
+ *               Defaults to { "Content-Length": "(GENERATED)" }, where Content-Length is dynamically calculated.
+ *
+ * @param enforceUseOfHeaders If set to true, the function will not automatically calculate and set the 'content-length' header,
+ *                            requiring the user to provide it in the 'headers' object. Defaults to false.
+ * @returns A mocked Response object suitable for use in tests.
+ */
+export function mockResponse(
+  statusCode: HttpStatus = HttpStatus.OK,
+  data: {[mKey:string]: unknown} = {},
+  headers: {[mKey:string]: unknown} = {
+    "content-length": "(GENERATED)"
+  },
+  enforceUseOfHeaders: boolean = false
+): Response<unknown, Record<string, unknown>> {
+  const contentLength = JSON.stringify(data).length;
+  const mHeaders = {...headers};
+  if (!enforceUseOfHeaders) {
+    mHeaders["content-length"] = contentLength;
+  }
+
+  const onParams: {[key: string]: unknown} = {
+    close: null
+  }
+
+  const resp = {} as unknown as Response;
+  resp.statusCode = statusCode;
+  resp.status = jest.fn(() => resp);
+  resp.json = jest.fn(() => resp);
+  resp.on = jest.fn().mockImplementation((key, value) => onParams[key] = value);
+  resp.send = jest.fn().mockImplementation(() => {
+    if (typeof onParams["close"] === "function") {
+      onParams["close"]();
+    }
+  });
+  resp.get = jest.fn().mockImplementation((key) => mHeaders[key]);
+  return resp;
+}
+
+/**
+ * Generates an array of mock User objects for testing.
+ *
+ * @returns {User[]} An array containing a single mock User object.
+ */
+export function mockUsers(): (User & {passwordDecrypted: string})[] {
+  // noinspection SpellCheckingInspection
+  return [
+    {id: 1, email: "testes@testes.com", passwordDecrypted: "12345678", password: "$2b$10$C0wgncbgYPO9PcwgTppEpOBwqTxNBNedo7uu6x4LRw4SQ.gcqvElC", status: UserStatus.Active, name: "Testes", role: UserRole.Common, createdAt: new Date(), updatedAt: new Date(), isEmailActivated: true}
+  ]
+}
+
+/**
+ * Generates a mock access token (JWT header) for testing.
+ *
+ * Note: This token is not a valid JWT. It only contains the header part.
+ *
+ * @returns {string} A mock JWT header string.
+ */
+export function mockAccessToken(): string {
+  return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
+}
+
+/**
+ * Generates a regular expression that matches a log message with the given details.
+ *
+ * @param method - The HTTP method (e.g., 'GET', 'POST'). Defaults to 'POST'.
+ * @param url - The requested URL. Defaults to '/test'.
+ * @param statusCode - The HTTP status code. Defaults to 200.
+ * @param ip - The client IP address. Defaults to '0.0.0.0'.
+ * @param userId - The ID of the user making the request.  Defaults to `undefined`. No user is logged if `undefined`.
+ * @param bytes - The response content length in bytes. Defaults to 0.
+ * @param language - The Accept-Language header value. Defaults to 'en-US'.
+ * @param userAgent - The User-Agent header value. Defaults to 'Mockup User Agent'.
+ * @returns A regular expression matching the log message.
+ */
+export function getLoggerPattern(
+  method: string = "POST",
+  url: string = "/test",
+  statusCode: number = 200,
+  ip: string = "0.0.0.0",
+  userId: number|undefined = undefined,
+  bytes: number = 2,
+  language: string = "en-US",
+  userAgent: string = "Mockup User Agent"
+) {
+  // noinspection RegExpRedundantEscape
+  return new RegExp(`\\[${method}\\]\\s\\[${url}\\]\\s\\[status\\s${statusCode}\\]\\s\\[[0-9]+\\.[0-9]+ms\\]\\s\\[ip\\s${ip}\\]\\s\\[user\\s${userId}\\]\\s\\[${bytes}\\sbytes\\]\\s\\[accept-language\\s${language}\\]\\s-\\s${userAgent}`);
+}
+
+// function sleep(timeout: number): Promise<void> {
+//   return new Promise((resolve) => setTimeout(() => resolve(), timeout));
+// }
+```
+
+```jwt-auth.guard.ts
+import { ExecutionContext, HttpStatus, Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request, Response } from "express";
+import { User, UserStatus } from "@prisma/client";
+
+/**
+ * JwtAuthGuard is a custom guard that protects routes using JWT authentication.
+ *
+ * It extends NestJS `AuthGuard` and uses the 'jwt' strategy,
+ * which should correspond to the name you've given your JWT strategy
+ * (likely `JwtStrategy` in your setup).
+ */
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    try {
+      const canActivateRes = super.canActivate(context);
+      const httpCtx = context.switchToHttp();
+
+      if (canActivateRes instanceof Promise) {
+        const isActivate = await canActivateRes;
+        if (isActivate) {
+          const user = httpCtx.getRequest<Request>().user as User;
+          if (user.status !== UserStatus.Active) {
+            httpCtx.getResponse<Response>().status(HttpStatus.UNAUTHORIZED).json({
+              message   : `Unauthorized (${user.status})`,
+              statusCode: 401
+            }).send();
+            return false;
+          } else {
+            return isActivate;
+          }
+        } else {
+          return false;
+        }
+      } else {
+        // Should never get here, only if @nestjs/passport is updated in future versions
+        return false;
+      }
+    } catch (e) {
+      // TODO Log errors
+      return false;
+    }
+  }
+}
+```
+
+```jwt-auth.guard.spec.ts
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { HttpStatus } from '@nestjs/common';
+import { User, UserStatus } from '@prisma/client';
+import { mockExecutionContext, mockUsers } from '../../utils/tests/utils';
+import { Response } from "express";
+import { AuthGuard } from "@nestjs/passport";
+
+describe('JwtAuthGuard', () => {
+  let guard: JwtAuthGuard;
+
+  beforeEach(() => {
+    guard = new JwtAuthGuard();
+  });
+
+  it('should be defined', () => {
+    expect(guard).toBeDefined();
+  });
+
+  it('should return false if super.canActivate returns false', async () => {
+    jest.spyOn(guard, 'canActivate' as any).mockImplementationOnce(() => false);
+    const context = mockExecutionContext();
+    const result = await guard.canActivate(context);
+    expect(result).toBe(false);
+  });
+
+  it('should return false if super.canActivate returns a rejected promise', async () => {
+    const error = new Error('Test error');
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.reject(error));
+    const context = mockExecutionContext();
+    const result = await guard.canActivate(context);
+    expect(result).toBe(false);
+  });
+
+  it('should return true if user is active', async () => {
+    const user: User = {
+      ...mockUsers()[0],
+      status: UserStatus.Active,
+    };
+    const context = mockExecutionContext(undefined, undefined, undefined, user);
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.resolve(true));
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+  });
+
+  it('should return false if user is active but super.canActivate returns false', async () => {
+    const user: User = {
+      ...mockUsers()[0],
+      status: UserStatus.Active,
+    };
+    const context = mockExecutionContext(undefined, undefined, undefined, user);
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.resolve(false));
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(false);
+  });
+
+  it('should return false and send unauthorized response if user is not active', async () => {
+    const user: User = {
+      ...mockUsers()[0],
+      status: UserStatus.Blocked,
+    };
+    const context = mockExecutionContext(undefined, undefined, undefined, user);
+    const httpArgumentsHost = context.switchToHttp();
+    const response = httpArgumentsHost.getResponse() as jest.Mocked<Response>;
+
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.resolve(true));
+
+    const result = await guard.canActivate(context);
+
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+    expect(response.json).toHaveBeenCalledWith({
+      message: `Unauthorized (${user.status})`,
+      statusCode: 401,
+    });
+    expect(response.send).toHaveBeenCalled();
+    expect(result).toBe(false);
+  });
+
+  it('should return false for any other status from super.canActivate', async () => {
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => 'some-other-status' as any);
+    const context = mockExecutionContext();
+    const result = await guard.canActivate(context);
+    expect(result).toBe(false);
+  });
+});
+```
+
+```adm-auth.guard.ts
+import { ExecutionContext, HttpStatus, Injectable } from "@nestjs/common";
+import { CanActivate } from "@nestjs/common/interfaces";
+import { Request, Response } from "express";
+import { User, UserRole } from "@prisma/client";
+import { I18nService } from "nestjs-i18n";
+import { I18nTranslations } from "../../generated/i18n.generated";
+
+/**
+ * AuthGuard for user Admin role.
+ */
+@Injectable()
+export class AdmAuthGuard implements CanActivate {
+
+  /**
+   * Constructor injector.
+   *
+   * @param i18nService - The I18nService to use for translating text.
+   */
+  constructor(private readonly i18nService: I18nService<I18nTranslations>) {}
+
+  /**
+   * Checks if the request is authenticated and if the user has the Admin role.
+   * @param context The execution context.
+   * @returns A Promise that resolves to `true` if the user is authorized, `false` otherwise.
+   */
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const httpArgs = context.switchToHttp();
+    const httpReq = httpArgs.getRequest<Request>();
+    const httpUser = httpReq.user as User;
+
+    if (!httpUser) {
+      httpArgs.getResponse<Response>().status(HttpStatus.UNAUTHORIZED).json({
+        message: this.i18nService.t("http-error.401.default"),
+        statusCode: HttpStatus.UNAUTHORIZED
+      }).send();
+      return false;
+    }
+
+    if (httpUser.role === UserRole.Admin) {
+      return true;
+    } else {
+      httpArgs.getResponse<Response>().status(HttpStatus.UNAUTHORIZED).json({
+        message: `${this.i18nService.t("http-error.401.no_access")} (${httpUser.role})`,
+        statusCode: HttpStatus.UNAUTHORIZED
+      }).send();
+      return false;
+    }
+  }
+}
+```
+
+```adm-auth.guard.spec.ts
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { HttpStatus } from '@nestjs/common';
+import { User, UserStatus } from '@prisma/client';
+import { mockExecutionContext, mockUsers } from '../../utils/tests/utils';
+import { Response } from "express";
+import { AuthGuard } from "@nestjs/passport";
+
+describe('JwtAuthGuard', () => {
+  let guard: JwtAuthGuard;
+
+  beforeEach(() => {
+    guard = new JwtAuthGuard();
+  });
+
+  it('should be defined', () => {
+    expect(guard).toBeDefined();
+  });
+
+  it('should return false if super.canActivate returns false', async () => {
+    jest.spyOn(guard, 'canActivate' as any).mockImplementationOnce(() => false);
+    const context = mockExecutionContext();
+    const result = await guard.canActivate(context);
+    expect(result).toBe(false);
+  });
+
+  it('should return false if super.canActivate returns a rejected promise', async () => {
+    const error = new Error('Test error');
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.reject(error));
+    const context = mockExecutionContext();
+    const result = await guard.canActivate(context);
+    expect(result).toBe(false);
+  });
+
+  it('should return true if user is active', async () => {
+    const user: User = {
+      ...mockUsers()[0],
+      status: UserStatus.Active,
+    };
+    const context = mockExecutionContext(undefined, undefined, undefined, user);
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.resolve(true));
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+  });
+
+  it('should return false if user is active but super.canActivate returns false', async () => {
+    const user: User = {
+      ...mockUsers()[0],
+      status: UserStatus.Active,
+    };
+    const context = mockExecutionContext(undefined, undefined, undefined, user);
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.resolve(false));
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(false);
+  });
+
+  it('should return false and send unauthorized response if user is not active', async () => {
+    const user: User = {
+      ...mockUsers()[0],
+      status: UserStatus.Blocked,
+    };
+    const context = mockExecutionContext(undefined, undefined, undefined, user);
+    const httpArgumentsHost = context.switchToHttp();
+    const response = httpArgumentsHost.getResponse() as jest.Mocked<Response>;
+
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => Promise.resolve(true));
+
+    const result = await guard.canActivate(context);
+
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.UNAUTHORIZED);
+    expect(response.json).toHaveBeenCalledWith({
+      message: `Unauthorized (${user.status})`,
+      statusCode: 401,
+    });
+    expect(response.send).toHaveBeenCalled();
+    expect(result).toBe(false);
+  });
+
+  it('should return false for any other status from super.canActivate', async () => {
+    jest
+      .spyOn(AuthGuard('jwt').prototype, 'canActivate' as any)
+      .mockImplementationOnce(() => 'some-other-status' as any);
+    const context = mockExecutionContext();
+    const result = await guard.canActivate(context);
+    expect(result).toBe(false);
+  });
+});
+```
+
+```auth.controller.ts
+import { Body, Controller, Post } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { ApiInternalServerErrorResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { AuthEntity } from './entity/auth.entity';
+import { LoginDto } from './dto/login.dto';
+import { HttpErrorEntity } from "../common/http-error.entity";
+
+/**
+ * AuthController handles user authentication.
+ */
+@Controller('auth')
+@ApiTags('auth')
+export class AuthController {
+
+  /**
+   * Constructor for the AuthController.
+   *
+   * Injects the `AuthService` to handle authentication logic.
+   *
+   * @param authService - The AuthService to be used by the controller.
+   */
+  constructor(private readonly authService: AuthService) {}
+
+  /**
+   * Handles user login requests.
+   *
+   * @param email - The user's email address.
+   * @param password - The user's password.
+   * @returns An `AuthEntity` containing the authentication token upon successful login.
+   */
+  @Post('login')
+  @ApiOkResponse({ type: AuthEntity, description: `User logged in successfully. The token expiry in ${process.env.JWT_EXPIRES_IN}.` })
+  @ApiInternalServerErrorResponse({
+    type       : HttpErrorEntity,
+    description: "Internal server error in case of server errors.",
+    example    : {
+      "message"   : "Internal server error",
+      "statusCode": 500
+    }
+  })
+  login(@Body() { email, password }: LoginDto) {
+    return this.authService.login(email, password);
+  }
+}
+```
+
+```auth.controller.spec.ts
+import { Test, TestingModule } from '@nestjs/testing';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { LoginDto } from "./dto/login.dto";
+import { PrismaBaseService } from "../prisma/prisma.service";
+import { JwtService } from "@nestjs/jwt";
+import { NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { mockAccessToken, mockUsers } from "../../utils/tests/utils";
+import { ConfigService } from "../config/config.service";
+
+describe('AuthController', () => {
+  let controller: AuthController;
+
+  const mockPrismaService = {
+    user: {
+      findUnique: jest.fn((args: { where: { email: string } }) => {
+        const {where: { email }} = args;
+        return mockUsers().find((user) => user.email === email);
+      })
+    }
+  };
+  const mockJwtService = {
+    sign: jest.fn().mockReturnValue(mockAccessToken())
+  }
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [
+        AuthService,
+        ConfigService,
+        {
+          provide: PrismaBaseService,
+          useValue: mockPrismaService
+        },
+        {
+          provide: JwtService,
+          useValue: mockJwtService
+        },
+      ],
+    }).compile();
+
+    controller = module.get<AuthController>(AuthController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  it('login user not found', async () => {
+    const body = {
+      email: "testes@notregistered.com",
+      password: "12345678"
+    } as LoginDto;
+
+    await expect(controller.login(body)).rejects.toThrow(
+      new NotFoundException(`No user found for email: ${body.email}`)
+    )
+  })
+
+  it('login user wrong password', async () => {
+    const body = {
+      email: "testes@testes.com",
+      password: "1234567"
+    } as LoginDto;
+
+    await expect(controller.login(body)).rejects.toThrow(
+      new UnauthorizedException('Invalid password')
+    )
+  })
+
+  it('login user success', async () => {
+    const body = {
+      email: "testes@testes.com",
+      password: "12345678"
+    } as LoginDto;
+
+    await expect(controller.login(body)).resolves.toEqual({
+      accessToken: mockAccessToken()
+    });
+  })
+});
+```
+
+```jwt.strategy.ts
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UsersService } from '../users/users.service';
+import { ConfigService } from "../config/config.service";
+
+/**
+ * JwtStrategy implements a JWT (JSON Web Token) authentication strategy.
+ *
+ * It extends PassportStrategy, using the 'jwt' strategy from passport-jwt.
+ */
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+
+  /**
+   * Constructor for the JwtStrategy.
+   *
+   * Injects dependencies and configures the JWT strategy.
+   *
+   * @param usersService - The UsersService used to retrieve user information.
+   * @param configService - The ConfigService to access environment variables.
+   */
+  constructor(private usersService: UsersService, private configService: ConfigService) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      secretOrKey: configService.getEnv("JWT_SECRET"),
+    });
+  }
+
+  /**
+   * Validates the JWT payload and returns the user object if successful.
+   *
+   * @param payload - The decoded JWT payload containing user information.
+   * @returns A Promise that resolves to the UserEntity if validation is successful.
+   * @throws UnauthorizedException if the user is not found or validation fails.
+   */
+  async validate(payload: { userId: number }) {
+    const user = await this.usersService.findOne(payload.userId);
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    return user;
+  }
+}
+```
+
+```jwt.strategy.spec.ts
+import { JwtStrategy } from './jwt.strategy';
+import { Test, TestingModule } from '@nestjs/testing';
+import { UsersService } from '../users/users.service';
+import { UnauthorizedException } from '@nestjs/common';
+import { mockUsers } from '../../utils/tests/utils';
+import { ConfigService } from "../config/config.service";
+
+describe('JwtStrategy', () => {
+  let strategy: JwtStrategy;
+  let usersService: UsersService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        JwtStrategy,
+        {
+          provide: UsersService,
+          useValue: {
+            findOne: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            getEnv: jest.fn().mockReturnValue("test-secret")
+          }
+        },
+      ],
+    }).compile();
+
+    strategy = module.get<JwtStrategy>(JwtStrategy);
+    usersService = module.get<UsersService>(UsersService);
+  });
+
+  it('should be defined', () => {
+    expect(strategy).toBeDefined();
+  });
+
+  it('should validate JWT and return user if found', async () => {
+    const user = mockUsers()[0];
+    (usersService.findOne as jest.Mock).mockReturnValueOnce(user);
+
+    const payload = { userId: user.id };
+    const validatedUser = await strategy.validate(payload);
+
+    expect(usersService.findOne).toHaveBeenCalledWith(payload.userId);
+    expect(validatedUser).toEqual(user);
+  });
+
+  it('should throw UnauthorizedException if user not found', async () => {
+    (usersService.findOne as jest.Mock).mockReturnValueOnce(null);
+
+    const payload = { userId: 123 };
+    await expect(strategy.validate(payload)).rejects.toThrow(UnauthorizedException);
+    expect(usersService.findOne).toHaveBeenCalledWith(payload.userId);
+  });
+});
+```
+
+```parse-safe-int.pipe.ts
+import { BadRequestException, Param, ParseIntPipe, ParseIntPipeOptions } from "@nestjs/common";
+import { capitalize } from "../../../utils/string";
+
+export class ParseSafeIntPipe extends ParseIntPipe {
+
+  protected value: string;
+
+  protected exceptionFactory: (error: string) => any = (error) => {
+    let strPropType = "";
+    if (this.propType) {
+      strPropType = ` ${capitalize(this.propType)}`;
+    }
+
+    let strPropName = "";
+    if (this.propName) {
+      strPropName = ` ${this.propName}`
+    }
+
+    let strValue = ` (${this.value})`;
+
+    return new BadRequestException(`${error}.${strPropType}${strPropName}${strValue}`);
+  };
+
+  constructor(private readonly propType?: string, private readonly propName?: string, options?: ParseIntPipeOptions) {
+    super(options);
+  }
+
+  protected isNumeric(value: string): boolean {
+    const parsedNum = Number(value);
+    this.value = value;
+    return parsedNum >= Number.MIN_SAFE_INTEGER
+      && parsedNum <= Number.MAX_SAFE_INTEGER
+      && super.isNumeric(value);
+  }
+}
+```
+
+```ParseSafeIntPipe.spec.ts
+import { ParseSafeIntPipe } from './parse-safe-int.pipe';
+import { ArgumentMetadata, BadRequestException } from '@nestjs/common';
+
+describe('ParseSafeIntPipe', () => {
+  let pipe: ParseSafeIntPipe;
+
+  beforeEach(() => {
+    pipe = new ParseSafeIntPipe();
+  });
+
+  it('should be defined', () => {
+    expect(pipe).toBeDefined();
+  });
+
+  it('should parse valid integers within safe range', async () => {
+    const metadata: ArgumentMetadata = {
+      type: 'param',
+      metatype: Number,
+      data: 'test',
+    };
+    expect(await pipe.transform('123', metadata)).toBe(123);
+    expect(await pipe.transform('0', metadata)).toBe(0);
+    expect(await pipe.transform('-123', metadata)).toBe(-123);
+    expect(await pipe.transform(Number.MAX_SAFE_INTEGER.toString(), metadata)).toBe(Number.MAX_SAFE_INTEGER);
+    expect(await pipe.transform(Number.MIN_SAFE_INTEGER.toString(), metadata)).toBe(Number.MIN_SAFE_INTEGER);
+  });
+
+  it('should throw BadRequestException for invalid integers', async () => {
+    const metadata: ArgumentMetadata = {
+      type: 'param',
+      metatype: Number,
+      data: 'test',
+    };
+    await expect(pipe.transform('abc', metadata)).rejects.toThrow(BadRequestException);
+    await expect(pipe.transform('123.45', metadata)).rejects.toThrow(BadRequestException);
+  });
+
+  it('should throw BadRequestException for integers outside safe range', async () => {
+    const metadata: ArgumentMetadata = {
+      type: 'param',
+      metatype: Number,
+      data: 'test',
+    };
+    await expect(pipe.transform((Number.MAX_SAFE_INTEGER + 1).toString(), metadata)).rejects.toThrow(
+      BadRequestException,
+    );
+    await expect(pipe.transform((Number.MIN_SAFE_INTEGER - 1).toString(), metadata)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('should use custom exception factory', async () => {
+    const metadata: ArgumentMetadata = {
+      type: 'param',
+      metatype: Number,
+      data: 'testParam',
+    };
+    const customPipe = new ParseSafeIntPipe('number', 'testProp', {
+      exceptionFactory: (error) => new BadRequestException(`Custom error: ${error}`),
+    });
+    await expect(customPipe.transform('abc', metadata)).rejects.toThrow('Validation failed (numeric string is expected). Number testProp (abc)');
+  });
+});
+```
+
+```i18n.ts
+/**
+ * A readonly array containing the supported language codes.
+ * Using `as const` ensures that both the array and its elements are treated as constants.
+ */
+export const _AcceptedLanguages = ["en-US", "pt-BR"] as const;
+
+/**
+ * Represents the accepted language codes for localization.
+ * This type is dynamically derived from the `Languages` array, ensuring type safety.
+ */
+export type AcceptedLanguages = typeof _AcceptedLanguages[number];
+
+/**
+ * Checks if a given language code is accepted.
+ *
+ * @param lang - The language code to check (e.g., "en-US").
+ * @returns True if the language code is accepted, otherwise false.
+ *           The `lang is AcceptedLanguages` type predicate helps TypeScript
+ *           narrow the type within conditional statements.
+ */
+export function isAcceptedLanguage(lang: string): lang is AcceptedLanguages {
+  // Asserting 'lang' as AcceptedLanguages here helps TypeScript with type inference inside `includes`.
+  return _AcceptedLanguages.includes(<AcceptedLanguages> lang);
+}
+```
+
+```i18n.spec.ts
+import { ResourcesService } from "../modules/resources/resources.service";
+import { mockResourcesService } from "../utils/tests/utils";
+import fs from "fs";
+import { _AcceptedLanguages, isAcceptedLanguage } from "./i18n";
+
+describe("i18n Types tests", () => {
+  let resourcesService: ResourcesService
+
+  beforeEach(async () => {
+    resourcesService = await mockResourcesService()
+  });
+
+  it("Verify if translations exists in AcceptedLanguages type", () => {
+    const i18nDir = resourcesService.getI18nDir();
+    const i18nLanguages = fs.readdirSync(i18nDir);
+
+    i18nLanguages.forEach((language) => {
+      expect(language).toBeOneOf(_AcceptedLanguages);
+    });
+  });
+
+  it("Verify if AcceptedLanguages are translated", () => {
+    const i18nDir = resourcesService.getI18nDir();
+    const i18nLanguages = fs.readdirSync(i18nDir);
+
+    _AcceptedLanguages.forEach((language) => {
+      expect(language).toBeOneOf(i18nLanguages);
+    });
+  });
+
+  it('should act as a type guard', () => {
+    const lang = 'en-US';
+
+    if (isAcceptedLanguage(lang)) {
+      // Here, TypeScript knows that 'lang' is of type AcceptedLanguages
+      expect(lang.toUpperCase()).toBe('EN-US');
+    } else {
+      // Here, TypeScript knows that 'lang' is still of type string
+    }
+  });
+});
+```

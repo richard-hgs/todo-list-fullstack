@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+/// Prisma client
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// Database configuration
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// User status on the system
+/// - Active: User is allowed to use the system.
+/// - Pending: User is pending account verifications.
+/// - Blocked: User is blocked and unable to use the system.
+enum UserStatus {
+  Active
+  Pending
+  Blocked
+}
+
+/// User role on the system
+/// - Common: Default user access, don't have permission on administrative tools.
+/// - Root: Root have privileged access on the system.
+enum UserRole {
+  Common
+  Root
+}
+
+/// User Table - Holds information about registered users on the system.
+model User {
+  id               Int         @id @default(autoincrement())
+  email            String      @unique @db.VarChar(50)
+  name             String      @unique @db.VarChar(50)
+  password         String      @db.VarChar(60)
+  status           UserStatus? @default(Pending)
+  role             UserRole?   @default(Common)
+  createdAt        DateTime?   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime?   @default(now()) @map("updated_at") @db.DateTime(0)
+  isEmailActivated Boolean     @default(false) @map("is_email_activated")
+  otps             Otp[]
+  logs             Log[]
+}
+
+/// One Time Password Usage Cases - Type of the usage of the generated Otp.
+enum OtpUseCase {
+  AccountActivation
+}
+
+/// One Time Password Table - Holds information about generated OTP codes by the users.
+model Otp {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @map("user_id")
+  code      String     @db.VarChar(6)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  expiresAt DateTime   @map("expires_at") @db.Timestamp(5)
+  useCase   OtpUseCase @map("use_case")
+  owner     User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([userId, code])
+}
+
+enum TaskStatus {
+  Pending
+  Completed
+}
+
+model TodoTask {
+  id          Int        @id @default(autoincrement())
+  userId      Int        @map("user_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  name        String     @unique @db.VarChar(50)
+  description String     @db.Text
+  status      TaskStatus @default(Pending)
+
+  @@map("todo_task")
+}
+
+/// Represents the severity level of a log entry.
+enum LogLevel {
+  /// A general log message.
+  Log
+  /// An error log message.
+  Error
+  /// A warning log message.
+  Warn
+  /// A debug log message.
+  Debug
+  /// A verbose log message (for detailed debugging).
+  Verbose
+  /// A fatal error log message.
+  Fatal
+}
+
+/// Represents a log entry in the system.
+model Log {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  level     LogLevel
+  message   String   @db.Text
+  owner     User?    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+}

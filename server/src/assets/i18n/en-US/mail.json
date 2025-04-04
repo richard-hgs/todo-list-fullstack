@@ -1,0 +1,10 @@
+{
+  "activate_account": {
+    "title": "Activate Your Account",
+    "thanks_for_registering": "Thank you for registering.",
+    "welcome_to": "Welcome to {app_name}!",
+    "your_activation_code_is": "Your activation code is",
+    "click_button": "Click the button below to automatically activate your account",
+    "please_ignore": "If you didn't request this, please ignore this email."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Name",
+  "email": "Email",
+  "password": "Password",
+  "otpUseCase": "OTP use case",
+  "userId": "User ID",
+  "guid": "Guid",
+  "file": "File",
+  "pluginId": "Plugin ID",
+  "icon": "Icon",
+  "message": "Message",
+  "passwordConfirm": "Password confirmation",
+  "appType": "App type",
+  "userEmail": "User email",
+  "acceptedTerms": "Terms accepted"
+}

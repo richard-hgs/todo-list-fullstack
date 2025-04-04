@@ -1,0 +1,13 @@
+{
+  "is_not_empty": "$t(objects.{property}) should not be empty ({property}).",
+  "max_length": "$t(objects.{property}) must be shorter than or equal to {constraints.0} characters ({property}).",
+  "min_length": "$t(objects.{property}) must be longer than or equal to {constraints.0} characters ({property}).",
+  "dont_exists": "$t(db.table.{constraints.0.tblName}) => $t(objects.{property}) already exists ({property}).",
+  "is_string": "$t(objects.{property}) must be a string ({property}).",
+  "is_number": "$t(objects.{property}) must be a number ({property}).",
+  "is_email": "$t(objects.{property}) must be a email ({property}).",
+  "is_array": "$t(objects.{property}) must be an array ({property}).",
+  "is_greater_than_zero": "$t(objects.{property}) must be greater than zero ({property}).",
+  "max_file_size": "$t(objects.{property}) must be less than {constraints.0} ({property}).",
+  "match": "$t(objects.{property}) must match $t(objects.{constraints.0}) field ({property})."
+}

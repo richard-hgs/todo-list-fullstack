@@ -1,0 +1,12 @@
+{
+  "is_not_empty": "$t(objects.{property}) não deve estar vazio ({property}).",
+  "max_length": "$t(objects.{property}) deve ser menor ou igual a {constraints.0} caracteres ({property}).",
+  "min_length": "$t(objects.{property}) deve ser maior ou igual a {constraints.0} caracteres ({property}).",
+  "dont_exists": "$t(db.table.{constraints.0.tblName}) => $t(objects.{property}) já existe ({property}).",
+  "is_string": "$t(objects.{property}) deve ser uma string ({property}).",
+  "is_number": "$t(objects.{property}) deve ser um número ({property}).",
+  "is_email": "$t(objects.{property}) deve ser um email ({property}).",
+  "is_array": "$t(objects.{property}) deve ser uma lista ({property}).",
+  "is_greater_than_zero": "$t(objects.{property}) deve ser maior que zero ({property}).",
+  "match": "$t(objects.{property}) deve ser igual ao campo $t(objects.{constraints.0}) ({property})."
+}

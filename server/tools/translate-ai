@@ -1,0 +1,6 @@
+for keys always use lower case with snake case in spaces and remove accents, also shorten key name.
+also remove the open curly brace and close curly brace leaving only the key:value for the translation.
+don't forget about the double quotes on key names.
+generate translation json file content for pt-BR and en-US for the phrase:
+
+Invalid OTP UseCase
