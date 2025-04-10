@@ -1,0 +1,9 @@
+## Ignore artifacts:
+#build
+#coverage
+#**/.gitignore
+#**/prettier.config.mjs
+#
+## Ignore all HTML files:
+#**/*.html
+#**/*.css
