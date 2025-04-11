@@ -1,8 +1,4 @@
-import {
-  combineReducers,
-  configureStore,
-  EnhancedStore,
-} from "@reduxjs/toolkit";
+import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import {
   FLUSH,
   PAUSE,
@@ -20,7 +16,11 @@ import todoTaskReducer from "@/lib/reducers/todoTaskReducer";
 /**
  * Creates and configures the Redux store with persisted reducers.
  */
-export const makeStore = (): EnhancedStore => {
+export function makeStore(
+  // eslint-disable-next-line
+  // @ts-ignore
+  preloadedState?: ReturnType<ReturnType<typeof makeStore>["getState"]>
+) {
   /**
    * Configuration for persisting the root reducer.
    * @type {import("redux-persist").PersistConfig}
@@ -76,8 +76,9 @@ export const makeStore = (): EnhancedStore => {
           ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
         },
       }),
+    preloadedState,
   });
-};
+}
 
 // Infer the type of makeStore
 export type AppStore = ReturnType<typeof makeStore>;

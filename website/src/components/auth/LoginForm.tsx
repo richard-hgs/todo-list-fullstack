@@ -29,7 +29,7 @@ export default function LoginForm() {
     handleSubmit,
     formState: { errors },
   } = useForm<IFormInput>({
-    mode: "onBlur",
+    mode: "onSubmit",
     resolver: yupResolver(schema),
   });
 
@@ -86,6 +86,7 @@ export default function LoginForm() {
           action="#"
           method="POST"
           onSubmit={handleSubmit(onSubmit)}
+          noValidate
         >
           <div>
             <label
@@ -97,11 +98,12 @@ export default function LoginForm() {
             <div className="mt-2">
               <input
                 {...register("email")}
+                data-testid="email"
+                required={true}
                 type="email"
                 name="email"
                 id="email"
                 autoComplete="email"
-                required
                 className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
               />
 
@@ -128,11 +130,12 @@ export default function LoginForm() {
             <div className="mt-2">
               <input
                 {...register("password")}
+                required={true}
+                data-testid="password"
                 type="password"
                 name="password"
                 id="password"
                 autoComplete="current-password"
-                required
                 className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
               />
 
