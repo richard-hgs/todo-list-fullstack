@@ -23,7 +23,7 @@ const config = {
   ],
   importOrderSeparation: true, // Add newlines between groups
   importOrderSortSpecifiers: true, // Alphabetize within import statements
-  importOrderCaseInsensitive: true
+  importOrderCaseInsensitive: true,
 };
 
 export default config;

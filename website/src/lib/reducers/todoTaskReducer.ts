@@ -16,7 +16,7 @@ interface TodoTask {
   status: string;
 }
 
-interface SelectedStatus {
+export interface SelectedStatus {
   name: string;
   value: string;
 }

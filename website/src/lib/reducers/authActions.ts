@@ -1,3 +1,4 @@
+// noinspection ExceptionCaughtLocallyJS,DuplicatedCode
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
@@ -80,6 +81,9 @@ export const resendActivationCode = createAsyncThunk(
       // Set Is Authenticating `true`
       dispatch(setIsAuthenticating(false));
     } catch (err) {
+      // Show error
+      console.error(err);
+
       // Dispatch `authReducer` Values to Redux Store
       dispatch(setMessage({ type: "error", message: getErrorMessage(err) }));
 
@@ -115,6 +119,9 @@ export const login = createAsyncThunk(
       // Validate User By Token
       dispatch(validateUser(token));
     } catch (err) {
+      // Show error
+      console.error(err);
+
       // Dispatch `authReducer` Values to Redux Store
       dispatch(setIsAuthenticated(false));
       dispatch(setToken(null));
@@ -165,12 +172,14 @@ export const validateUser = createAsyncThunk(
       // Set Is Authenticating `false`
       dispatch(setIsAuthenticating(false));
     } catch (err) {
+      // Show error
       console.error(err);
 
       // Dispatch `authReducer` Values to Redux Store
       dispatch(setIsAuthenticated(false));
       dispatch(setToken(null));
       dispatch(setUser({}));
+      dispatch(setMessage({ type: "error", message: getErrorMessage(err) }));
 
       // Set Is Authenticating `false`
       dispatch(setIsAuthenticating(false));
@@ -187,7 +196,7 @@ export const validateUser = createAsyncThunk(
  */
 export const logout = createAsyncThunk(
   "auth/logout",
-  async (e, { dispatch }) => {
+  async (_e, { dispatch }) => {
     // Set Is Authenticating `true`
     dispatch(setIsAuthenticating(true));
 
